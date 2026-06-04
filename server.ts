@@ -156,7 +156,10 @@ app.post("/api/cv/analyze", upload.single("cv"), async (req, res) => {
       }
     });
 
-    const aiJsonStr = response.text ? response.text.trim() : "{}";
+    let aiJsonStr = response.text ? response.text.trim() : "{}";
+    if (aiJsonStr.startsWith("```json")) aiJsonStr = aiJsonStr.replace(/^```json/i, "");
+    if (aiJsonStr.endsWith("```")) aiJsonStr = aiJsonStr.replace(/```$/, "");
+    aiJsonStr = aiJsonStr.trim();
     const analysis = JSON.parse(aiJsonStr);
     
     res.json({ success: true, cvText, analysis });
