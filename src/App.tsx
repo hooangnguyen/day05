@@ -3,105 +3,166 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Upload, Briefcase, Search, Settings } from 'lucide-react';
+import React from 'react';
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
+import { Briefcase, Search, UploadCloud, ChevronRight, FileText, Target, LayoutTemplate } from 'lucide-react';
 import CVUploader from './components/CVUploader';
 import JobSearch from './components/JobSearch';
-import SettingsModal from './components/SettingsModal';
-import { motion, AnimatePresence } from 'motion/react';
+import RoleSelection from './pages/RoleSelection';
+import CVWorkshop from './pages/CVWorkshop';
+
+function Sidebar() {
+  const location = useLocation();
+  
+  return (
+    <aside className="w-16 lg:w-72 border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 transition-all duration-300 z-20">
+      <div className="flex items-center gap-3 p-4 lg:p-6 mb-4 border-b border-slate-200 bg-white">
+        <div className="w-8 h-8 shrink-0 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm ring-1 ring-blue-600/20">
+          X
+        </div>
+        <div className="hidden lg:flex flex-col">
+          <span className="text-sm font-bold tracking-tight text-slate-900 leading-none">Career Survival Kit</span>
+          <span className="text-[10px] uppercase tracking-wider text-slate-500 mt-1 font-medium">Project X Vietnam</span>
+        </div>
+      </div>
+      
+      <nav className="flex-1 px-3 space-y-1">
+        <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-3 px-3 hidden lg:block mt-2">
+          Your Workspace
+        </div>
+
+        <NavLink 
+          to="/upload" 
+          className={({ isActive }) => `flex items-center justify-center lg:justify-between gap-3 p-3 rounded-xl transition-all duration-200 relative group overflow-hidden ${isActive ? 'bg-white text-blue-600 border border-slate-200 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'}`}
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l-xl"></div>}
+              <div className="flex items-center gap-3">
+                <UploadCloud className={`w-5 h-5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                <span className="hidden lg:block font-medium text-sm">Upload CV</span>
+              </div>
+            </>
+          )}
+        </NavLink>
+        
+        <NavLink 
+          to="/role" 
+          className={({ isActive }) => `flex items-center justify-center lg:justify-between gap-3 p-3 rounded-xl transition-all duration-200 relative group overflow-hidden ${isActive ? 'bg-white text-blue-600 border border-slate-200 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'}`}
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l-xl"></div>}
+              <div className="flex items-center gap-3">
+                <Target className={`w-5 h-5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                <span className="hidden lg:block font-medium text-sm">Role Selection</span>
+              </div>
+            </>
+          )}
+        </NavLink>
+
+        <NavLink 
+          to="/cv-workshop" 
+          className={({ isActive }) => `flex items-center justify-center lg:justify-between gap-3 p-3 rounded-xl transition-all duration-200 relative group overflow-hidden ${isActive ? 'bg-white text-blue-600 border border-slate-200 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'}`}
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l-xl"></div>}
+              <div className="flex items-center gap-3">
+                <LayoutTemplate className={`w-5 h-5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                <span className="hidden lg:block font-medium text-sm">CV Workshop</span>
+              </div>
+            </>
+          )}
+        </NavLink>
+
+        <div className="my-4 border-t border-slate-200 mx-3"></div>
+
+        <NavLink 
+          to="/job-search" 
+          className={({ isActive }) => `flex items-center justify-center lg:justify-between gap-3 p-3 rounded-xl transition-all duration-200 relative group overflow-hidden ${isActive ? 'bg-white text-blue-600 border border-slate-200 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'}`}
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l-xl"></div>}
+              <div className="flex items-center gap-3">
+                <Search className={`w-5 h-5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                <span className="hidden lg:block font-medium text-sm">Find Jobs</span>
+              </div>
+            </>
+          )}
+        </NavLink>
+      </nav>
+
+      <div className="mt-auto p-4 lg:p-6 bg-white border-t border-slate-200">
+        <div className="flex items-center justify-center lg:justify-start gap-3">
+          <div className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </div>
+          <span className="text-xs text-slate-500 hidden lg:block font-medium">Systems Online</span>
+        </div>
+      </div>
+    </aside>
+  );
+}
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'cv' | 'jobs'>('cv');
-  const [showSettings, setShowSettings] = useState(false);
+  const [cvFile, setCvFile] = React.useState<File | null>(null);
+  const [cvText, setCvText] = React.useState<string | null>(null);
+  const [cvAnalysis, setCvAnalysis] = React.useState<any>(null);
+  const [selectedRole, setSelectedRole] = React.useState<any>(null);
+  const [editedCvData, setEditedCvData] = React.useState<any>(null);
 
-  // App State
-  const [geminiKey, setGeminiKey] = useState(localStorage.getItem('geminiKey') || '');
-  const [cvAnalysis, setCvAnalysis] = useState<any>(null);
+  // Sync initial parsed CV to edited state when available
+  React.useEffect(() => {
+    if (cvAnalysis?.analysis?.parsed_cv && !editedCvData) {
+      setEditedCvData(cvAnalysis.analysis.parsed_cv);
+    }
+  }, [cvAnalysis]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-slate-200 font-sans">
-      <header className="bg-[#0D0D0D] border-b border-white/10 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-indigo-500">
-            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold"><Briefcase className="w-5 h-5" /></div>
-            <h1 className="text-xl font-semibold tracking-tight text-white">CareerAI</h1>
-          </div>
+    <BrowserRouter>
+      <div className="w-full h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden max-w-[100vw]">
+        <Sidebar />
+
+        {/* Main Interface Area */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 w-full bg-white">
           
-          <div className="flex gap-4">
-            <nav className="flex space-x-1">
-              <button
-                onClick={() => setActiveTab('cv')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'cv' ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
-              >
-                <Upload className="w-4 h-4 inline-block mr-1" />
-                CV Analysis
-              </button>
-              <button
-                onClick={() => setActiveTab('jobs')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'jobs' ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
-              >
-                <Search className="w-4 h-4 inline-block mr-1" />
-                Find Jobs
-              </button>
-            </nav>
-            <button 
-              onClick={() => setShowSettings(true)}
-              className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-colors"
-              title="Settings & API Keys"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
+          <main className="flex-1 overflow-x-hidden overflow-y-auto">
+            <div className="h-full w-full mx-auto flex flex-col">
+              <Routes>
+                <Route path="/" element={<Navigate to="/upload" replace />} />
+                <Route 
+                  path="/upload" 
+                  element={
+                    <CVUploader 
+                      cvAnalysis={cvAnalysis} 
+                      setCvAnalysis={setCvAnalysis} 
+                      cvText={cvText}
+                      setCvText={setCvText}
+                      cvFile={cvFile}
+                      setCvFile={setCvFile}
+                    />
+                  } 
+                />
+                <Route path="/role" element={<RoleSelection selectedRole={selectedRole} setSelectedRole={setSelectedRole} />} />
+                <Route path="/cv-workshop" element={<CVWorkshop cvAnalysis={cvAnalysis} setCvAnalysis={setCvAnalysis} cvText={cvText} cvFile={cvFile} selectedRole={selectedRole} cvData={editedCvData} setCvData={setEditedCvData} />} />
+                <Route 
+                  path="/job-search" 
+                  element={
+                    <JobSearch 
+                      cvAnalysis={cvAnalysis}
+                      selectedRole={selectedRole}
+                      cvData={editedCvData}
+                    />
+                  } 
+                />
+              </Routes>
+            </div>
+          </main>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 h-[calc(100vh-64px)] overflow-y-auto">
-        <AnimatePresence mode="wait">
-          {activeTab === 'cv' && (
-            <motion.div
-              key="cv"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <CVUploader 
-                geminiKey={geminiKey} 
-                cvAnalysis={cvAnalysis} 
-                setCvAnalysis={setCvAnalysis} 
-                onRequireKey={() => setShowSettings(true)}
-              />
-            </motion.div>
-          )}
-
-          {activeTab === 'jobs' && (
-            <motion.div
-              key="jobs"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <JobSearch 
-                geminiKey={geminiKey} 
-                cvAnalysis={cvAnalysis}
-                onRequireKey={() => setShowSettings(true)}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      {showSettings && (
-        <SettingsModal 
-          onClose={() => setShowSettings(false)} 
-          geminiKey={geminiKey}
-          setGeminiKey={(v) => {
-            setGeminiKey(v);
-            localStorage.setItem('geminiKey', v);
-          }}
-        />
-      )}
-    </div>
+      </div>
+    </BrowserRouter>
   );
 }

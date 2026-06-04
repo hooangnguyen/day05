@@ -74,10 +74,26 @@ const MOCK_DECODA_JOBS = [
 
 // --- Webhooks / API Routes ---
 
+app.get("/api/test-apify", async (req, res) => {
+  try {
+    const apifyToken = process.env.APIFY_API_TOKEN;
+    const { ApifyClient } = await import('apify-client');
+    const client = new ApifyClient({ token: apifyToken });
+    const store = await client.store().list({ search: "google jobs" });
+    const fs = await import('fs');
+    fs.writeFileSync('/app/applet/output.txt', JSON.stringify(store.items.map(i => i.name)));
+    res.json(store);
+  } catch (e: any) {
+    const fs = await import('fs');
+    fs.writeFileSync('/app/applet/output.txt', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/api/cv/analyze", upload.single("cv"), async (req, res) => {
   try {
     const file = req.file;
-    const { apiKey } = req.body; // user can pass their own key
+    const { apiKey, role } = req.body; // user can pass their own key
     if (!file) {
       return res.status(400).json({ error: "No CV file uploaded." });
     }
@@ -97,7 +113,7 @@ app.post("/api/cv/analyze", upload.single("cv"), async (req, res) => {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite",
       contents: [
-        { text: "Analyze the following CV. Extract the key skills, experience, and provide 3-5 specific, actionable suggestions for improvement based on the content (e.g. formatting, missing keywords, impactful phrasing). Respond in JSON format." },
+        { text: `You are a recruitment AI for Project X Vietnam. Analyze the following CV, with the user's target role being: ${role || "Not specified"}. Extract the key skills, experience, and provide 3-5 actionable, track-specific suggestions for improvement based on the content (e.g. formatting, missing keywords, impactful phrasing) focused on their target role. Respond in JSON format.\n\nIMPORTANT: All string fields in the JSON response MUST be written in Vietnamese (tiếng Việt).` },
         { text: `CV Content:\n${cvText}` }
       ],
       config: {
@@ -106,11 +122,36 @@ app.post("/api/cv/analyze", upload.single("cv"), async (req, res) => {
           type: Type.OBJECT,
           properties: {
             extracted_skills: { type: Type.ARRAY, items: { type: Type.STRING }, description: "List of skills found in CV" },
-            overall_feedback: { type: Type.STRING, description: "General summary of the CV quality" },
-            improvement_suggestions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Specific suggestions to improve the CV" },
-            extracted_summary: { type: Type.STRING, description: "A brief summary of the candidate's profile" }
+            overall_feedback: { type: Type.STRING, description: "General summary of the CV quality (in Vietnamese)" },
+            improvement_suggestions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Specific suggestions to improve the CV (in Vietnamese)" },
+            extracted_summary: { type: Type.STRING, description: "A brief summary of the candidate's profile (in Vietnamese)" },
+            extracted_location: { type: Type.STRING, description: "The candidate's current location or preferred location based on the CV. Set to empty string if not found. (in Vietnamese)" },
+            parsed_cv: {
+              type: Type.OBJECT,
+              description: "Structured representation of the CV. (in Vietnamese)",
+              properties: {
+                name: { type: Type.STRING },
+                role: { type: Type.STRING, description: "Current or target role" },
+                email: { type: Type.STRING },
+                location: { type: Type.STRING },
+                links: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Links like LinkedIn, GitHub" },
+                summary: { type: Type.STRING },
+                experience: { 
+                  type: Type.ARRAY, 
+                  items: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                      title: { type: Type.STRING },
+                      company: { type: Type.STRING },
+                      period: { type: Type.STRING },
+                      bullets: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    }
+                  } 
+                }
+              }
+            }
           },
-          required: ["extracted_skills", "overall_feedback", "improvement_suggestions", "extracted_summary"]
+          required: ["extracted_skills", "overall_feedback", "improvement_suggestions", "extracted_summary", "extracted_location"]
         }
       }
     });
@@ -125,76 +166,123 @@ app.post("/api/cv/analyze", upload.single("cv"), async (req, res) => {
   }
 });
 
-app.post("/api/jobs/crawl", async (req, res) => {
-    try {
-      // Logic for using "Decoda API" to crawl jobs
-      // Simulating a call to Decoda API:
-      // const decodaRes = await fetch("https://api.decoda.com/v1/crawl", { ... })
-      // const jobs = await decodaRes.json();
-      
-      const jobs = MOCK_DECODA_JOBS; 
-      
-      const supabase = getSupabase();
-      if (!supabase) {
-        // If no Supabase is configured, just return the mock data for testing
-        return res.json({ success: true, message: "Decoda crawl simulated (No Supabase configured, using mock data)", jobs });
-      }
-
-      // Insert into Supabase
-      const { data, error } = await supabase
-        .from("jobs")
-        .upsert(jobs.map(j => ({
-            title: j.title,
-            company: j.company,
-            location: j.location,
-            description: j.description,
-            requirements: j.requirements,
-            url: j.url,
-            source: j.source
-        })), { onConflict: 'url' }) // use url as unique constraint if possible
-        .select();
-
-      if (error) {
-          console.error("Supabase Error:", error);
-          // If table doesn't exist, we just pass the jobs dynamically to client to not break the app
-          return res.json({ success: true, message: "Decoda crawl simulated, but Supabase insert failed (check schema).", jobs });
-      }
-
-      res.json({ success: true, message: "Jobs crawled via Decoda API and saved to Supabase", jobs: data || jobs });
-    } catch(err: any) {
-        console.error("Crawl error", err);
-        res.status(500).json({ error: err.message || "Failed to crawl jobs" });
-    }
-});
-
 app.post("/api/jobs/search", async (req, res) => {
     try {
-        const { query, cvSummary, cvSkills, apiKey } = req.body;
+        const { query, cvData, cvSummary, cvSkills, cvLocation, apiKey } = req.body;
         
         let jobs = [];
-        const supabase = getSupabase();
-        if (supabase) {
-            const { data } = await supabase.from("jobs").select("*").limit(20);
-            if (data && data.length > 0) {
-                jobs = data;
+        
+        // Fetch directly from RapidAPI APIs (Google Jobs & LinkedIn Jobs)
+        try {
+            const titleFilter = query || "software engineer";
+            const locationQuery = cvLocation || "";
+            const rapidApiKey = process.env.RAPIDAPI_KEY || "ceb20530admshbf1dbb9122fb20fp1292dcjsn22e7d70428fe";
+
+            const fetchGooglePage = async (page: number) => {
+                try {
+                    const rapidApiRes = await fetch(`https://google-jobs-api.p.rapidapi.com/google-jobs/relocation?include=${encodeURIComponent(titleFilter)}${locationQuery ? `&location=${encodeURIComponent(locationQuery)}` : ""}&page=${page}`, {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-rapidapi-host": "google-jobs-api.p.rapidapi.com",
+                            "x-rapidapi-key": rapidApiKey
+                        }
+                    });
+                    if (rapidApiRes.ok) {
+                        const dataJson = await rapidApiRes.json();
+                        return Array.isArray(dataJson.jobs) ? dataJson.jobs : [];
+                    }
+                } catch (e) { console.error(e); }
+                return [];
+            };
+
+            const fetchLinkedInJobs = async () => {
+                 try {
+                     const rapidApiRes = await fetch(`https://linkedin-job-search-api.p.rapidapi.com/active-jb-1h?offset=0&title_filter=${encodeURIComponent(titleFilter)}&location_filter=${encodeURIComponent(locationQuery)}&description_type=text`, {
+                         method: "GET",
+                         headers: {
+                             "Content-Type": "application/json",
+                             "x-rapidapi-host": "linkedin-job-search-api.p.rapidapi.com",
+                             "x-rapidapi-key": rapidApiKey
+                         }
+                     });
+                     if (rapidApiRes.ok) {
+                         const dataJson = await rapidApiRes.json();
+                         // API might return array directly or within `data`
+                         return Array.isArray(dataJson) ? dataJson : (Array.isArray(dataJson.data) ? dataJson.data : []);
+                     }
+                 } catch (e) { console.error(e); }
+                 return [];
+            };
+
+            const fetchApifyJobs = async () => {
+                 const apifyToken = process.env.APIFY_API_TOKEN;
+                 if (!apifyToken) return [];
+                 
+                 try {
+                     const { ApifyClient } = await import('apify-client');
+                     const client = new ApifyClient({ token: apifyToken });
+                     
+                     // Run the johnvc/google-jobs-scraper actor
+                     const run = await client.actor("johnvc/google-jobs-scraper").call({
+                         queries: locationQuery ? `${titleFilter} in ${locationQuery}` : titleFilter,
+                         maxItems: 15,
+                         maxPagesPerQuery: 1
+                     });
+                     
+                     const { items } = await client.dataset(run.defaultDatasetId).listItems();
+                     return items;
+                 } catch (e) {
+                     console.error("Apify Error:", e);
+                     return [];
+                 }
+            };
+
+            // Fetch from multiple sources in parallel
+            const pagesToFetch = [1, 2, 3];
+            const [googlePages, linkedinJobs, apifyJobs] = await Promise.all([
+                Promise.all(pagesToFetch.map(p => fetchGooglePage(p))),
+                fetchLinkedInJobs(),
+                fetchApifyJobs()
+            ]);
+            
+            const rawJobs = [...googlePages.flat(), ...linkedinJobs, ...apifyJobs];
+            
+            if (rawJobs.length > 0) {
+                const truncate = (s: string, max: number) => typeof s === 'string' && s.length > max ? s.substring(0, max) : s;
+
+                jobs = rawJobs.map((j: any) => ({
+                    title: truncate(j.title || "Unknown Title", 255),
+                    company: truncate(j.company || j.companyName || j.company_name || j.organization || "Unknown Company", 255),
+                    location: truncate(j.location || j.company_location || (j.locations_derived && j.locations_derived[0]) || "Unknown Location", 255),
+                    description: truncate(j.snippet || j.description || j.description_text || "", 15000),
+                    requirements: truncate(j.snippet || j.description || j.description_text || "", 15000),
+                    url: truncate(j.url || j.applyLink || j.googleJobsUrl || j.job_url || j.link || j.external_apply_url || (j.apply_options && j.apply_options.length > 0 ? j.apply_options[0].link : '') || `https://google.com/search?q=${encodeURIComponent(j.title || '')}`, 500),
+                    source: truncate(j.source || (j.apply_options ? "Apify (Google Jobs)" : (j.job_url || j.external_apply_url ? "LinkedIn (RapidAPI)" : "Google Jobs (RapidAPI)")), 255)
+                }));
             } else {
+                console.warn("RapidAPI search returned no jobs, falling back to mock jobs");
                 jobs = MOCK_DECODA_JOBS;
             }
-        } else {
-            jobs = MOCK_DECODA_JOBS; // fallback if no supabase configured yet
+        } catch (err) {
+            console.warn("RapidAPI search errored, falling back to mock jobs", err);
+            jobs = MOCK_DECODA_JOBS;
         }
 
         const ai = getAIClient(apiKey);
         
+        // Prepare context based on whether structured CV Data is available
+        const userContextString = cvData ? `User CV Structure Details:\n${JSON.stringify(cvData, null, 2)}` : `User CV Summary: ${cvSummary || "Not provided"}\nUser CV Skills: ${(cvSkills||[]).join(", ")}`;
+
         // Use Gemini to filter and evaluate fit percentage
         const response = await ai.models.generateContent({
             model: "gemini-3.1-flash-lite",
             contents: [
                 { 
-                 text: "You are a recruitment AI. Evaluate the provided jobs against the user's dream job query and their CV summary/skills. Return a JSON array of evaluated jobs with a fit_percent (0-100), a short reason for the fit, and keep original job fields. Filter out jobs that are completely irrelevant (<20%)." 
+                 text: "You are a recruitment AI for Project X Vietnam. Evaluate the provided jobs against the user's dream job query and their structured CV data. Return a JSON array of evaluated jobs with a fit_percent (0-100), a short reason for the fit based on concrete skills/experience matches or gaps, and keep original job fields. Filter out jobs that are completely irrelevant (<20%). IMPORTANT: You MUST keep the EXACT original `url` field from the provided jobs array, do not modify or make up URLs." 
                 },
                 { 
-                 text: `Query: ${query || "No specific query, just matching by CV"}\n\nUser CV Summary: ${cvSummary || "Not provided"}\nUser CV Skills: ${(cvSkills||[]).join(", ")}\n\nJobs: ${JSON.stringify(jobs)}`
+                 text: `Query: ${query || "No specific query, matching by CV"}\n\n${userContextString}\n\nJobs: ${JSON.stringify(jobs)}`
                 }
             ],
             config: {
@@ -238,6 +326,18 @@ app.post("/api/jobs/search", async (req, res) => {
 // Vite middleware for development
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    try {
+      const apifyToken = process.env.APIFY_API_TOKEN || "apify_api_h4tLof5F3295xK0Oq16zS96y1r8R4f00RXXP";
+      if (apifyToken) {
+        const { ApifyClient } = await import('apify-client');
+        const client = new ApifyClient({ token: apifyToken });
+        const store = await client.store().list({ search: "google jobs" });
+        const fs = await import('fs');
+        fs.writeFileSync('/app/applet/output.txt', JSON.stringify(store.items.map(i => i.name)));
+      }
+    } catch(e) {
+      console.log("Error querying apify", e);
+    }
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

@@ -1,3 +1,5 @@
+const fetch = require('node-fetch');
+
 async function test() {
     try {
         const titleFilter = "Data Engineer";
@@ -11,7 +13,7 @@ async function test() {
             }
         });
         const text = await res.text();
-        console.log(JSON.stringify(JSON.parse(text)[0], null, 2));
+        console.log(res.status, text);
     } catch (e) {
         console.error(e);
     }

@@ -11,7 +11,8 @@ async function test() {
             }
         });
         const text = await res.text();
-        console.log(JSON.stringify(JSON.parse(text)[0], null, 2));
+        console.log("Status:", res.status);
+        console.log("Response:", text.substring(0, 500));
     } catch (e) {
         console.error(e);
     }
