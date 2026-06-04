@@ -41,36 +41,7 @@ function getAIClient(userProvidedKey?: string) {
   return new GoogleGenAI({ apiKey: key, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
 }
 
-// Mock Decoda API response since Decoda API implies a local or undocumented scraper API
-const MOCK_DECODA_JOBS = [
-  {
-    title: "Frontend Developer (ReactJS)",
-    company: "Tech Corp VN",
-    location: "Ho Chi Minh City",
-    description: "We are looking for a Frontend Developer with strong React experience.",
-    requirements: "At least 2 years of experience with React, TypeScript, and modern state management. Good understanding of UI/UX principles.",
-    url: "https://topcv.vn/job/1",
-    source: "TopCV",
-  },
-  {
-    title: "Backend Engineer (Node.js)",
-    company: "Global Logistics",
-    location: "Hanoi",
-    description: "Join our backend team to build scalable microservices.",
-    requirements: "Strong Node.js, Express, and PostgreSQL skills. Experience with AWS is a plus.",
-    url: "https://linkedin.com/job/2",
-    source: "LinkedIn",
-  },
-  {
-    title: "Fullstack Developer (React/Node)",
-    company: "Startup Hub",
-    location: "Remote",
-    description: "Exciting opportunity to build products from scratch.",
-    requirements: "Proficient in React, Node.js. Experience with Supabase or Firebase. Self-driven and communicative.",
-    url: "https://topcv.vn/job/3",
-    source: "TopCV",
-  }
-];
+
 
 // --- Webhooks / API Routes ---
 
@@ -175,101 +146,69 @@ app.post("/api/jobs/search", async (req, res) => {
         
         let jobs = [];
         
-        // Fetch directly from RapidAPI APIs (Google Jobs & LinkedIn Jobs)
+        // Fetch from free public APIs (Remotive and Arbeitnow)
         try {
             const titleFilter = query || "software engineer";
             const locationQuery = cvLocation || "";
-            const rapidApiKey = process.env.RAPIDAPI_KEY || "ceb20530admshbf1dbb9122fb20fp1292dcjsn22e7d70428fe";
-
-            const fetchGooglePage = async (page: number) => {
-                try {
-                    const rapidApiRes = await fetch(`https://google-jobs-api.p.rapidapi.com/google-jobs/relocation?include=${encodeURIComponent(titleFilter)}${locationQuery ? `&location=${encodeURIComponent(locationQuery)}` : ""}&page=${page}`, {
-                        method: "GET",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "x-rapidapi-host": "google-jobs-api.p.rapidapi.com",
-                            "x-rapidapi-key": rapidApiKey
-                        }
-                    });
-                    if (rapidApiRes.ok) {
-                        const dataJson = await rapidApiRes.json();
-                        return Array.isArray(dataJson.jobs) ? dataJson.jobs : [];
-                    }
-                } catch (e) { console.error(e); }
-                return [];
-            };
-
-            const fetchLinkedInJobs = async () => {
+            
+            const fetchRemotiveJobs = async () => {
                  try {
-                     const rapidApiRes = await fetch(`https://linkedin-job-search-api.p.rapidapi.com/active-jb-1h?offset=0&title_filter=${encodeURIComponent(titleFilter)}&location_filter=${encodeURIComponent(locationQuery)}&description_type=text`, {
-                         method: "GET",
-                         headers: {
-                             "Content-Type": "application/json",
-                             "x-rapidapi-host": "linkedin-job-search-api.p.rapidapi.com",
-                             "x-rapidapi-key": rapidApiKey
-                         }
-                     });
-                     if (rapidApiRes.ok) {
-                         const dataJson = await rapidApiRes.json();
-                         // API might return array directly or within `data`
-                         return Array.isArray(dataJson) ? dataJson : (Array.isArray(dataJson.data) ? dataJson.data : []);
+                     const searchTerm = encodeURIComponent(titleFilter + (locationQuery ? " " + locationQuery : ""));
+                     const res = await fetch(`https://remotive.com/api/remote-jobs?search=${searchTerm}&limit=15`);
+                     if (res.ok) {
+                         const dataJson = await res.json();
+                         return Array.isArray(dataJson.jobs) ? dataJson.jobs : [];
                      }
-                 } catch (e) { console.error(e); }
+                 } catch (e) { console.error("Remotive error", e); }
                  return [];
             };
 
-            const fetchApifyJobs = async () => {
-                 const apifyToken = process.env.APIFY_API_TOKEN;
-                 if (!apifyToken) return [];
-                 
+            const fetchArbeitnowJobs = async () => {
                  try {
-                     const { ApifyClient } = await import('apify-client');
-                     const client = new ApifyClient({ token: apifyToken });
-                     
-                     // Run the johnvc/google-jobs-scraper actor
-                     const run = await client.actor("johnvc/google-jobs-scraper").call({
-                         queries: locationQuery ? `${titleFilter} in ${locationQuery}` : titleFilter,
-                         maxItems: 15,
-                         maxPagesPerQuery: 1
-                     });
-                     
-                     const { items } = await client.dataset(run.defaultDatasetId).listItems();
-                     return items;
-                 } catch (e) {
-                     console.error("Apify Error:", e);
-                     return [];
-                 }
+                     const res = await fetch(`https://www.arbeitnow.com/api/job-board-api`);
+                     if (res.ok) {
+                         const dataJson = await res.json();
+                         let arbeitJobs = Array.isArray(dataJson.data) ? dataJson.data : [];
+                         if (titleFilter) {
+                             const lowerTitle = titleFilter.toLowerCase();
+                             arbeitJobs = arbeitJobs.filter((j: any) => (j.title || '').toLowerCase().includes(lowerTitle) || (j.description || '').toLowerCase().includes(lowerTitle));
+                         }
+                         return arbeitJobs;
+                     }
+                 } catch (e) { console.error("Arbeitnow error", e); }
+                 return [];
             };
 
-            // Fetch from multiple sources in parallel
-            const pagesToFetch = [1, 2, 3];
-            const [googlePages, linkedinJobs, apifyJobs] = await Promise.all([
-                Promise.all(pagesToFetch.map(p => fetchGooglePage(p))),
-                fetchLinkedInJobs(),
-                fetchApifyJobs()
+            const [remotiveJobs, arbeitnowJobs] = await Promise.all([
+                fetchRemotiveJobs(),
+                fetchArbeitnowJobs()
             ]);
             
-            const rawJobs = [...googlePages.flat(), ...linkedinJobs, ...apifyJobs];
+            const rawJobs = [...remotiveJobs.slice(0, 15), ...arbeitnowJobs.slice(0, 15)];
             
             if (rawJobs.length > 0) {
                 const truncate = (s: string, max: number) => typeof s === 'string' && s.length > max ? s.substring(0, max) : s;
 
                 jobs = rawJobs.map((j: any) => ({
                     title: truncate(j.title || "Unknown Title", 255),
-                    company: truncate(j.company || j.companyName || j.company_name || j.organization || "Unknown Company", 255),
-                    location: truncate(j.location || j.company_location || (j.locations_derived && j.locations_derived[0]) || "Unknown Location", 255),
-                    description: truncate(j.snippet || j.description || j.description_text || "", 15000),
-                    requirements: truncate(j.snippet || j.description || j.description_text || "", 15000),
-                    url: truncate(j.url || j.applyLink || j.googleJobsUrl || j.job_url || j.link || j.external_apply_url || (j.apply_options && j.apply_options.length > 0 ? j.apply_options[0].link : '') || `https://google.com/search?q=${encodeURIComponent(j.title || '')}`, 500),
-                    source: truncate(j.source || (j.apply_options ? "Apify (Google Jobs)" : (j.job_url || j.external_apply_url ? "LinkedIn (RapidAPI)" : "Google Jobs (RapidAPI)")), 255)
+                    company: truncate(j.company || j.company_name || "Unknown Company", 255),
+                    location: truncate(j.candidate_required_location || j.location || "Remote", 255),
+                    description: truncate(j.description || "", 15000),
+                    requirements: truncate(j.description || "", 15000),
+                    url: truncate(j.url || j.applyLink || `https://google.com/search?q=${encodeURIComponent(j.title || '')}`, 500),
+                    source: truncate(j.source || (j.candidate_required_location ? "Remotive" : "Arbeitnow"), 255)
                 }));
             } else {
-                console.warn("RapidAPI search returned no jobs, falling back to mock jobs");
-                jobs = MOCK_DECODA_JOBS;
+                console.warn("Public APIs search returned no jobs.");
+                jobs = [];
             }
         } catch (err) {
-            console.warn("RapidAPI search errored, falling back to mock jobs", err);
-            jobs = MOCK_DECODA_JOBS;
+            console.warn("Public APIs search errored.", err);
+            jobs = [];
+        }
+
+        if (jobs.length === 0) {
+            return res.json({ success: true, results: [] });
         }
 
         const ai = getAIClient(apiKey);
