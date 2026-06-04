@@ -65,6 +65,5 @@ export default function CVUploader({ cvAnalysis, setCvAnalysis, cvFile, setCvFil
         )}
       </div>
     </div>
-    
   );
 }
