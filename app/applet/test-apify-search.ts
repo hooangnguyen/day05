@@ -1,7 +1,7 @@
 import { ApifyClient } from 'apify-client';
 
 async function run() {
-  const apifyToken = process.env.APIFY_API_TOKEN || "apify_api_h4tLof5F3295xK0Oq16zS96y1r8R4f00RXXP";
+  const apifyToken = process.env.APIFY_API_TOKEN || "";
   if (!apifyToken) {
     console.log("No token"); return;
   }

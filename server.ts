@@ -176,7 +176,7 @@ app.post("/api/jobs/search", async (req, res) => {
         try {
             const titleFilter = query || "software engineer";
             const locationQuery = cvLocation || "";
-            const rapidApiKey = process.env.RAPIDAPI_KEY || "ceb20530admshbf1dbb9122fb20fp1292dcjsn22e7d70428fe";
+            const rapidApiKey = process.env.RAPIDAPI_KEY || "";
 
             const fetchGooglePage = async (page: number) => {
                 try {
@@ -326,18 +326,6 @@ app.post("/api/jobs/search", async (req, res) => {
 // Vite middleware for development
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    try {
-      const apifyToken = process.env.APIFY_API_TOKEN || "apify_api_h4tLof5F3295xK0Oq16zS96y1r8R4f00RXXP";
-      if (apifyToken) {
-        const { ApifyClient } = await import('apify-client');
-        const client = new ApifyClient({ token: apifyToken });
-        const store = await client.store().list({ search: "google jobs" });
-        const fs = await import('fs');
-        fs.writeFileSync('/app/applet/output.txt', JSON.stringify(store.items.map(i => i.name)));
-      }
-    } catch(e) {
-      console.log("Error querying apify", e);
-    }
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
